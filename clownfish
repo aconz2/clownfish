@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+
+"""Count occurrences of each kmer in each gene against a sample"""
+
+import argparse
+import sys
+import logging
+import resource
+import collections
+import functools
+from Bio import SeqIO
+import numpy
+import jellyfish
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(message)s')
+
+# field seperator when --raw is used
+SEP = ' '
+
+def memory_usage():
+    """Returns in kilobytes, the total (or maybe peak) memory usage"""
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+
+def trim_and_clamp(arr,
+                   left_trim=None,
+                   right_trim=None,
+                   minimum=None,
+                   maximum=None):
+    """arr should be a numpy array,
+    the first `left_trim` values in the array will be dropped
+    the last `right_trim` values in the array will be dropped
+    values in the array < `minimum` will be set to 0
+    values in the array > `maximum` will be set to 0
+    (uses kwargs for easy partial application, all parameters
+    may be given as None)"""
+
+    if left_trim is not None:
+        arr = arr[left_trim:]
+
+    if right_trim is not None:
+        arr = arr[0:-right_trim]
+
+    if minimum is not None:
+        mins = numpy.ones(arr.size) * minimum
+        arr = numpy.multiply(arr, arr >= mins, arr)
+
+    if maximum is not None:
+        maxs = numpy.ones(arr.size) * maximum
+        arr = numpy.multiply(arr, arr <= maxs, arr)
+
+    return arr
+
+def kmers(gene, kmer_length):
+    """Yield each kmer in gene"""
+    gene_length = len(gene)
+    if kmer_length > gene_length:
+        return
+
+    for i in range(0, gene_length - kmer_length + 1):
+        yield gene[i:i+kmer_length]
+
+def main():
+    """Write the occurrence data for each gene with given set of reads.
+    Kmer length is taken from the jellyfish database
+    Writes output as one float per line, no headers or anything.
+    Use the --raw flag to output the counts for each gene with no
+    scoring function applied, trimming and clipping will still be applied
+    (this ouput will be large)
+    Writes to STDOUT and logs to STDERR"""
+
+    score_methods = {'mean': numpy.mean,
+                     'median': numpy.median}
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--genes', required=True, type=str,
+                        help='FASTA file with genes')
+    parser.add_argument('--database', required=True,
+                        type=str, help='Jellyfish database file')
+    parser.add_argument('--left-trim', type=int, default=None,
+                        help='Drop the first <left> numbers')
+    parser.add_argument('--right-trim', type=int, default=None,
+                        help='Drop the last <right> numbers')
+    parser.add_argument('--min', type=int, default=None,
+                        help='Consider values < <min> to be 0')
+    parser.add_argument('--max', type=int, default=None,
+                        help='Consider values > <max> to be 0')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--score', choices=list(score_methods.keys()),
+                       type=str, help='Scoring method to use')
+    group.add_argument('--raw', action='store_true', default=False,
+                       help='Write list of counts for each gene')
+
+    args = parser.parse_args()
+    logging.debug(args)
+    
+    trim_and_clamper = functools.partial(trim_and_clamp,
+                                         left_trim=args.left_trim,
+                                         right_trim=args.right_trim,
+                                         minimum=args.min,
+                                         maximum=args.max)
+
+    with open(args.genes) as genes_handle:
+
+        logging.debug("Mem: %d MB", memory_usage())
+        jellyfish_database = jellyfish.ReadMerFile(args.database)
+        kmer_length = len(str(jellyfish_database.mer()))
+        jellyfish_query = jellyfish.QueryMerFile(args.database)
+        logging.debug("Mem: %d MB", memory_usage())
+
+        genes = (str(record.seq) \
+                 for record in SeqIO.parse(genes_handle, 'fasta'))
+        # list comprehension for single gene, generator for all genes
+        counts = ([jellyfish_query[jellyfish.MerDNA(kmer)] \
+                  for kmer in kmers(gene, kmer_length)] \
+                  for gene in genes)
+        arrs = (numpy.array(count) for count in counts)
+        arrs_trimmed = (trim_and_clamper(arr) for arr in arrs)
+
+        if args.raw:
+            counts_strs = (SEP.join(map(str, arr)) + '\n' \
+                           for arr in arrs_trimmed)
+            sys.stdout.writelines(counts_strs)
+        else:
+            scoring_function = score_methods[args.score]
+            scores = (scoring_function(arr) for arr in arrs_trimmed)
+            scores_strs = (str(score) + '\n' for score in scores)
+            sys.stdout.writelines(scores_strs)
+
+
+if __name__ == "__main__":
+    main()
