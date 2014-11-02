@@ -53,6 +53,7 @@ int main(int argc, char *argv[]) {
   const size_t initial_hash_size = std::stoul(argv[3]);
   const int    nb_threads        = std::stoi(argv[4]);
 
+  std::cerr << "Starting to fill jelly hash" << std::endl;
   // Parse the input file.
   // 7 is the length in bits of the counter field
   // 126 is the maximum reprobe value
@@ -63,6 +64,8 @@ int main(int argc, char *argv[]) {
     counter.exec_join(nb_threads);
   }
 
+  std::cerr << "Done filling jelly fish" << std::endl; 
+  std::cerr << "Starting to count genes" << std::endl;
   mer_dna mer;
   uint64_t val = 0;
   auto hash = ary.ary();

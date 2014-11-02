@@ -65,20 +65,25 @@ def count_main():
                         help='Length of kmer to use')
     args = parser.parse_args(sys.argv[2:])
     logging.debug(args)
+    # lower case it!
+    args.canonical = 'true' if args.canonical else 'false'
     # <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> < <genes_file>
     child_args = [os.path.join(os.path.dirname(__file__), 'count'),
                  args.kmer_length, args.canonical,  args.size, args.threads,
                  args.samples]
     child_args = list(map(str, child_args))
 
-    with open(args.genes) as genes_handle:
+    logging.debug("Launching child process `count`")
+    logging.debug(child_args)
+    with open(args.genes) as genes_handle, \
+         subprocess.Popen(child_args,
+                        stdin=subprocess.PIPE,
+                        stdout=sys.stdout, stderr=sys.stderr,
+                        close_fds=False,
+                        bufsize=1, # line buffering
+                        universal_newlines=True) as child_proc:
         genes = (str(record.seq) \
                  for record in SeqIO.parse(genes_handle, 'fasta'))
-        logging.debug("Launching child process `count`")
-        logging.debug(child_args)
-        child_proc = subprocess.Popen(child_args, stdin=subprocess.PIPE,
-                                      stdout=sys.stdout, stderr=sys.stderr,
-                                      universal_newlines=True)
         child_proc.stdin.writelines(gene + '\n' for gene in genes)
         
  
@@ -99,7 +104,7 @@ def score_main():
     parser.add_argument('--max', type=int, default=None,
                         help='Consider values > <max> to be 0')
     parser.add_argument('--method', choices=list(score_methods.keys()),
-                       type=str, help='Scoring method to use')
+                       required=True, type=str, help='Scoring method to use')
     args = parser.parse_args(sys.argv[2:])
     logging.debug(args)
 
