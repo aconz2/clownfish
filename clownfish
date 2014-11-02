@@ -102,17 +102,25 @@ def main():
     with open(args.genes) as genes_handle:
 
         logging.debug("Mem: %d MB", memory_usage())
+        logging.debug("Beginning to fill dict")
         jellyfish_database = jellyfish.ReadMerFile(args.database)
-        kmer_length = len(str(jellyfish_database.mer()))
-        jellyfish_query = jellyfish.QueryMerFile(args.database)
+        key_values = ((str(kmer), count) \
+                      for (kmer, count) in jellyfish_database)
+        jellyfish_query = collections.defaultdict(lambda: 0, key_values)
+        # jellyfish_query = jellyfish.QueryMerFile(args.database)
+        logging.debug("Done filling dict")
         logging.debug("Mem: %d MB", memory_usage())
+
+        kmer_length = len(next(iter(jellyfish_query)))
 
         genes = (str(record.seq) \
                  for record in SeqIO.parse(genes_handle, 'fasta'))
         # list comprehension for single gene, generator for all genes
-        counts = ([jellyfish_query[jellyfish.MerDNA(kmer)] \
+        # counts = ([jellyfish_query[jellyfish.MerDNA(kmer)] \
+        counts = ([jellyfish_query[kmer] \
                   for kmer in kmers(gene, kmer_length)] \
                   for gene in genes)
+
         arrs = (numpy.array(count) for count in counts)
         arrs_trimmed = (trim_and_clamper(arr) for arr in arrs)
 
