@@ -67,25 +67,19 @@ def count_main():
     logging.debug(args)
     # lower case it!
     args.canonical = 'true' if args.canonical else 'false'
-    # <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> < <genes_file>
+    # <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> <genes_file>
     child_args = [os.path.join(os.path.dirname(__file__), 'count'),
                  args.kmer_length, args.canonical,  args.size, args.threads,
-                 args.samples]
+                 args.samples, args.genes]
     child_args = list(map(str, child_args))
 
     logging.debug("Launching child process `count`")
     logging.debug(child_args)
     with open(args.genes) as genes_handle, \
          subprocess.Popen(child_args,
-                        stdin=subprocess.PIPE,
                         stdout=sys.stdout, stderr=sys.stderr,
-                        close_fds=False,
-                        bufsize=1, # line buffering
-                        universal_newlines=True) as child_proc:
-        genes = (str(record.seq) \
-                 for record in SeqIO.parse(genes_handle, 'fasta'))
-        child_proc.stdin.writelines(gene + '\n' for gene in genes)
-        
+                        close_fds=False) as child_proc:
+        pass
  
 
 def score_main():

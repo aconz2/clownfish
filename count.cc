@@ -41,9 +41,9 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-  if(argc != 6) {
+  if(argc != 7) {
     std::cerr << "Error: Wrong number of arguments\n"
-              << "Usage: " << argv[0] << " <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> < <genes_file>" << std::endl;
+              << "Usage: " << argv[0] << " <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> <genes_file>" << std::endl;
     exit(1);
   }
 
@@ -66,11 +66,41 @@ int main(int argc, char *argv[]) {
 
   std::cerr << "Done filling jelly fish" << std::endl; 
   std::cerr << "Starting to count genes" << std::endl;
+
   mer_dna mer;
   uint64_t val = 0;
   auto hash = ary.ary();
- 
-  for(std::string line; std::getline(std::cin, line); ) {
+  std::ifstream genes_fs(argv[6]);
+  std::string buf; 
+  std::string gene;
+  // skip the first line
+  std::getline(genes_fs, buf); 
+
+  while(!genes_fs.eof()) {
+    // "parse" the fasta file, wouldnt be necessary if fasta files 
+    // didn't allow wrapped lines!
+    gene = "";
+    do {
+      std::getline(genes_fs, buf);
+      // 2 checks on the same condition, don't know how to combine
+      if(buf[0] != '>') {
+        gene += buf; 
+      }
+    } while(buf[0] != '>' && !genes_fs.eof());
+
+    // count the kmers
+    for(int i = 0; i < (int) gene.size() - kmer_length + 1; ++i) {
+      mer = gene.substr(i, kmer_length);
+      if(!hash->get_val_for_key(mer, &val)) {
+        val = 0;
+      }
+      std::cout << val << ' ';
+    }
+    std::cout << '\n';
+  }
+
+  std::cerr << "Done counting genes" << std::endl;
+/*  for(std::string line; std::getline(std::cin, line); ) {
     for(int i = 0; i < (int) line.size() - kmer_length + 1; ++i) {
       mer = line.substr(i, kmer_length);
       if(!hash->get_val_for_key(mer, &val)) {
@@ -80,7 +110,7 @@ int main(int argc, char *argv[]) {
     }
     std::cout << '\n';
   }
-
+*/
   // Query the database for all the mers on the command line
 /* commented out for test
   mer_dna  m;
