@@ -2,20 +2,17 @@
 
 """Count occurrences of each kmer in each gene against a sample"""
 
-import argparse
+import os
 import sys
 import logging
+import argparse
 import resource
-import collections
 import functools
-from Bio import SeqIO
+import subprocess
 import numpy
-import jellyfish
+from Bio import SeqIO
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(message)s')
-
-# field seperator when --raw is used
-SEP = ' '
 
 def memory_usage():
     """Returns in kilobytes, the total (or maybe peak) memory usage"""
@@ -50,32 +47,49 @@ def trim_and_clamp(arr,
 
     return arr
 
-def kmers(gene, kmer_length):
-    """Yield each kmer in gene"""
-    gene_length = len(gene)
-    if kmer_length > gene_length:
-        return
+def count_main():
+    """Count kmers in `reads` file, then list the corresponding count for 
+    each gene in `genes`"""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--genes', required=True, type=str,
+                        help='FASTA file with genes')
+    parser.add_argument('--samples', required=True,
+                        type=str, help='FASTA or FASTQ samples')
+    parser.add_argument('--canonical', action='store_true', default=False,
+                        help='Consider every kmer as its canonical form')
+    parser.add_argument('--threads', type=int, default=1,
+                        help='Number of threads to run jellyfish counter with')
+    parser.add_argument('--size', type=str, required=True,
+                        help='Initial size of jellyfish hash table') 
+    parser.add_argument('--kmer-length', type=int, required=True, 
+                        help='Length of kmer to use')
+    args = parser.parse_args(sys.argv[2:])
+    logging.debug(args)
+    # <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> < <genes_file>
+    child_args = [os.path.join(os.path.dirname(__file__), 'count'),
+                 args.kmer_length, args.canonical,  args.size, args.threads,
+                 args.samples]
+    child_args = list(map(str, child_args))
 
-    for i in range(0, gene_length - kmer_length + 1):
-        yield gene[i:i+kmer_length]
+    with open(args.genes) as genes_handle:
+        genes = (str(record.seq) \
+                 for record in SeqIO.parse(genes_handle, 'fasta'))
+        logging.debug("Launching child process `count`")
+        logging.debug(child_args)
+        child_proc = subprocess.Popen(child_args, stdin=subprocess.PIPE,
+                                      stdout=sys.stdout, stderr=sys.stderr,
+                                      universal_newlines=True)
+        child_proc.stdin.writelines(gene + '\n' for gene in genes)
+        
+ 
 
-def main():
-    """Write the occurrence data for each gene with given set of reads.
-    Kmer length is taken from the jellyfish database
-    Writes output as one float per line, no headers or anything.
-    Use the --raw flag to output the counts for each gene with no
-    scoring function applied, trimming and clipping will still be applied
-    (this ouput will be large)
-    Writes to STDOUT and logs to STDERR"""
-
+def score_main():
+    """Scores a list of counts, one per line from STDIN and 
+    writes to STDOUT"""
     score_methods = {'mean': numpy.mean,
                      'median': numpy.median}
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--genes', required=True, type=str,
-                        help='FASTA file with genes')
-    parser.add_argument('--database', required=True,
-                        type=str, help='Jellyfish database file')
     parser.add_argument('--left-trim', type=int, default=None,
                         help='Drop the first <left> numbers')
     parser.add_argument('--right-trim', type=int, default=None,
@@ -84,56 +98,38 @@ def main():
                         help='Consider values < <min> to be 0')
     parser.add_argument('--max', type=int, default=None,
                         help='Consider values > <max> to be 0')
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--score', choices=list(score_methods.keys()),
+    parser.add_argument('--method', choices=list(score_methods.keys()),
                        type=str, help='Scoring method to use')
-    group.add_argument('--raw', action='store_true', default=False,
-                       help='Write list of counts for each gene')
-
-    args = parser.parse_args()
+    args = parser.parse_args(sys.argv[2:])
     logging.debug(args)
-    
+
     trim_and_clamper = functools.partial(trim_and_clamp,
                                          left_trim=args.left_trim,
                                          right_trim=args.right_trim,
                                          minimum=args.min,
                                          maximum=args.max)
 
-    with open(args.genes) as genes_handle:
+    scoring_method = score_methods[args.method]
 
-        logging.debug("Mem: %d MB", memory_usage())
-        logging.debug("Beginning to fill dict")
-        jellyfish_database = jellyfish.ReadMerFile(args.database)
-        key_values = ((str(kmer), count) \
-                      for (kmer, count) in jellyfish_database)
-        jellyfish_query = collections.defaultdict(lambda: 0, key_values)
-        # jellyfish_query = jellyfish.QueryMerFile(args.database)
-        logging.debug("Done filling dict")
-        logging.debug("Mem: %d MB", memory_usage())
+    int_lists = (list(map(int, line.split())) for line in sys.stdin)
+    arrs = (numpy.array(int_list) for int_list in int_lists)
+    scores = (scoring_method(trim_and_clamp(arr)) for arr in arrs)
+    scores_strs = (str(score) + '\n' for score in scores)
 
-        kmer_length = len(next(iter(jellyfish_query)))
+    sys.stdout.writelines(scores_strs)
 
-        genes = (str(record.seq) \
-                 for record in SeqIO.parse(genes_handle, 'fasta'))
-        # list comprehension for single gene, generator for all genes
-        # counts = ([jellyfish_query[jellyfish.MerDNA(kmer)] \
-        counts = ([jellyfish_query[kmer] \
-                  for kmer in kmers(gene, kmer_length)] \
-                  for gene in genes)
-
-        arrs = (numpy.array(count) for count in counts)
-        arrs_trimmed = (trim_and_clamper(arr) for arr in arrs)
-
-        if args.raw:
-            counts_strs = (SEP.join(map(str, arr)) + '\n' \
-                           for arr in arrs_trimmed)
-            sys.stdout.writelines(counts_strs)
-        else:
-            scoring_function = score_methods[args.score]
-            scores = (scoring_function(arr) for arr in arrs_trimmed)
-            scores_strs = (str(score) + '\n' for score in scores)
-            sys.stdout.writelines(scores_strs)
-
-
+def main():
+    """Estimate relative gene abundance using kmers"""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('command', choices=['count', 'score'])
+    args = parser.parse_args(sys.argv[1:2])
+    if args.command == 'count':
+        count_main()
+    elif args.command == 'score':
+        score_main()
+    else:
+        print("Invalid choice")
+        sys.exit(1)
+    
 if __name__ == "__main__":
     main()
