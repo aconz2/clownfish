@@ -75,12 +75,9 @@ def count_main():
 
     logging.debug("Launching child process `count`")
     logging.debug(child_args)
-    with open(args.genes) as genes_handle, \
-         subprocess.Popen(child_args,
-                        stdout=sys.stdout, stderr=sys.stderr,
-                        close_fds=False) as child_proc:
-        pass
- 
+    subprocess.check_call(child_args,
+                          stdout=sys.stdout, stderr=sys.stderr,
+                          close_fds=False)
 
 def score_main():
     """Scores a list of counts, one per line from STDIN and 
