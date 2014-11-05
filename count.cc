@@ -10,6 +10,7 @@
 #include <jellyfish/mer_iterator.hpp>
 #include <jellyfish/mer_dna.hpp>
 #include <jellyfish/jellyfish.hpp>
+#include <jellyfish/large_hash_iterator.hpp>
 
 using jellyfish::mer_dna;
 typedef jellyfish::stream_manager<char**> stream_manager;
@@ -52,6 +53,7 @@ int main(int argc, char *argv[]) {
   const bool canonical = strcmp(argv[2], "true") == 0;
   const size_t initial_hash_size = std::stoul(argv[3]);
   const int    nb_threads        = std::stoi(argv[4]);
+  std::ifstream genes_fs(argv[6]);
 
   std::cerr << "Starting to fill jelly hash" << std::endl;
   // Parse the input file.
@@ -68,14 +70,27 @@ int main(int argc, char *argv[]) {
   std::cerr << "Starting to count genes" << std::endl;
 
   mer_dna mer;
-  uint64_t val = 0;
   auto hash = ary.ary();
-  std::ifstream genes_fs(argv[6]);
+  uint64_t val = 0;
   std::string buf; 
   std::string gene;
+  uint64_t max = 0;
+  uint64_t total = 0;
+  
+  for(auto it = hash->begin(); it != hash->end(); ++it) {
+    auto pair = *it;
+    //std::cerr << pair.first << ':'  << pair.second <<  std::endl;
+    total += pair.second;
+    if(pair.second > max) {
+      max = pair.second;
+    }
+  }
+
+  std::cerr << "max:" << max << std::endl;
+  std::cerr << "total:" << total << std::endl;
+  
   // skip the first line
   std::getline(genes_fs, buf); 
-
   while(!genes_fs.eof()) {
     // "parse" the fasta file, wouldnt be necessary if fasta files 
     // didn't allow wrapped lines!
