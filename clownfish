@@ -79,9 +79,17 @@ def count_main():
                           stdout=sys.stdout, stderr=sys.stderr,
                           close_fds=False)
 
+def score_file(file, preprocess, primary, secondary):
+    """DOC"""
+    with open(file) as handle:    
+        int_lists = (list(map(int, line.split())) for line in handle)
+        arrs = (numpy.array(int_list) for int_list in int_lists)
+        scores = (primary(preprocess(arr)) for arr in arrs)
+        return secondary(numpy.array(list(scores)))
+ 
 def score_main():
-    """Scores a list of counts, one per line from STDIN and 
-    writes to STDOUT"""
+    """Scores a collection of counts, specify a scoring method for first scoring
+    each row (corresponds to a gene segment) and then for the column"""
     score_methods = {'mean': numpy.mean,
                      'median': numpy.median}
 
@@ -94,8 +102,11 @@ def score_main():
                         help='Consider values < <min> to be 0')
     parser.add_argument('--max', type=int, default=None,
                         help='Consider values > <max> to be 0')
-    parser.add_argument('--method', choices=list(score_methods.keys()),
-                       required=True, type=str, help='Scoring method to use')
+    parser.add_argument('--primary-method', choices=list(score_methods.keys()),
+                       required=True, type=str, help='Scoring method to use for kmer counts')
+    parser.add_argument('--secondary-method', choices=list(score_methods.keys()),
+                       required=True, type=str, help='Scoring method to use for gene scores')
+    parser.add_argument('files', nargs='+', help='Files to score', required=True)
     args = parser.parse_args(sys.argv[2:])
     logging.debug(args)
 
@@ -105,14 +116,13 @@ def score_main():
                                          minimum=args.min,
                                          maximum=args.max)
 
-    scoring_method = score_methods[args.method]
+    primary_scoring_method = score_methods[args.primary_method]
+    secondary_scoring_method = score_methods[args.secondary_method]
+    scores = (score_file(file) for file in args.files)    
+    str_scores = (str(score) for score in scores)    
 
-    int_lists = (list(map(int, line.split())) for line in sys.stdin)
-    arrs = (numpy.array(int_list) for int_list in int_lists)
-    scores = (scoring_method(trim_and_clamp(arr)) for arr in arrs)
-    scores_strs = (str(score) + '\n' for score in scores)
-
-    sys.stdout.writelines(scores_strs)
+    sys.stdout.write('\t'.join(args.files) + '\n')
+    sys.stdout.write('\t'.join(str_scores) + '\n')
 
 def main():
     """Estimate relative gene abundance using kmers"""
