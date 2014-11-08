@@ -115,7 +115,7 @@ def score_main():
     args = parser.parse_args(sys.argv[2:])
     logging.debug(args)
 
-    primary_scoring_method = score_methods[args.primary_method]
+    scoring_method = score_methods[args.method]
     trim_and_clamper = functools.partial(trim_and_clamp,
                                          left_trim=args.left_trim,
                                          right_trim=args.right_trim,
@@ -124,9 +124,8 @@ def score_main():
 
     with open(args.cf_file, 'rb') as cf_handle:
         arrs = parse_cf_file(cf_handle)
-        scores = (primary_scoring_method(trim_and_clamper(arr)) for arr in arrs)
-        str_scores = (str(score) for score in scores)    
-        sys.stdout.write('\t'.join(str_scores) + '\n')
+        scores = (scoring_method(trim_and_clamper(arr)) for arr in arrs)
+        sys.stdout.writelines(str(score) + '\n' for score in scores)
 
 def dump_main():
     """Convert the cf binary file to ascii"""
@@ -135,10 +134,13 @@ def dump_main():
     args = parser.parse_args(sys.argv[2:])
     logging.debug(args)
    
-    with open(args.cf_file, 'rb') as cf_handle:
-        arrs = parse_cf_file(cf_handle)
-        str_arrs = (' '.join(map(str, arr)) for arr in arrs)
-        sys.stdout.writelines(str_arr + '\n' for str_arr in str_arrs)
+    try: 
+        with open(args.cf_file, 'rb') as cf_handle:
+            arrs = parse_cf_file(cf_handle)
+            str_arrs = ('\t'.join(map(str, arr)) for arr in arrs)
+            sys.stdout.writelines(str_arr + '\n' for str_arr in str_arrs)
+    except BrokenPipeError:
+        pass
 
 def main():
     """Estimate relative gene abundance using kmers"""
