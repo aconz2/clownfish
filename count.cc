@@ -73,15 +73,18 @@ int main(int argc, char *argv[]) {
  
   uint64_t max = 0;
   uint64_t total = 0;
+  uint64_t distinct = 0;
   for(auto it = hash->begin(); it != hash->end(); ++it) {
     auto pair = *it;
     //std::cerr << pair.first << ':'  << pair.second <<  std::endl;
+    distinct++;
     total += pair.second;
     if(pair.second > max) {
       max = pair.second;
     }
   }
 
+  std::cerr << "distinct:" << distinct << std::endl;
   std::cerr << "max:" << max << std::endl;
   std::cerr << "total:" << total << std::endl;
 
@@ -113,8 +116,10 @@ int main(int argc, char *argv[]) {
       if(!hash->get_val_for_key(mer, &val)) {
         val = 0;
       }
+      //std::cerr << val << ' ';
       output_fs.write(reinterpret_cast<const char *>(&val), sizeof(uint32_t));
     }
+    //std::cerr << std::endl;
   }
 
   std::cerr << "Done counting genes" << std::endl;
