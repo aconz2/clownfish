@@ -42,9 +42,9 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-  if(argc != 7) {
+  if(argc != 8) {
     std::cerr << "Error: Wrong number of arguments\n"
-              << "Usage: " << argv[0] << " <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> <genes_file>" << std::endl;
+              << "Usage: " << argv[0] << " <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> <genes_file> <output_file>" << std::endl;
     exit(1);
   }
 
@@ -54,6 +54,7 @@ int main(int argc, char *argv[]) {
   const size_t initial_hash_size = std::stoul(argv[3]);
   const int    nb_threads        = std::stoi(argv[4]);
   std::ifstream genes_fs(argv[6]);
+  std::ofstream output_fs(argv[7], std::ios::binary);
 
   std::cerr << "Starting to fill jelly hash" << std::endl;
   // Parse the input file.
@@ -67,16 +68,11 @@ int main(int argc, char *argv[]) {
   }
 
   std::cerr << "Done filling jelly fish" << std::endl; 
-  std::cerr << "Starting to count genes" << std::endl;
 
-  mer_dna mer;
   auto hash = ary.ary();
-  uint64_t val = 0;
-  std::string buf; 
-  std::string gene;
+ 
   uint64_t max = 0;
   uint64_t total = 0;
-  
   for(auto it = hash->begin(); it != hash->end(); ++it) {
     auto pair = *it;
     //std::cerr << pair.first << ':'  << pair.second <<  std::endl;
@@ -88,7 +84,13 @@ int main(int argc, char *argv[]) {
 
   std::cerr << "max:" << max << std::endl;
   std::cerr << "total:" << total << std::endl;
+
+  mer_dna mer;
+  uint64_t val = 0;
+  std::string buf; 
+  std::string gene;
   
+  std::cerr << "Starting to count genes" << std::endl;
   // skip the first line
   std::getline(genes_fs, buf); 
   while(!genes_fs.eof()) {
@@ -104,14 +106,15 @@ int main(int argc, char *argv[]) {
     } while(buf[0] != '>' && !genes_fs.eof());
 
     // count the kmers
-    for(int i = 0; i < (int) gene.size() - kmer_length + 1; ++i) {
+    unsigned int length = (int) gene.size() - kmer_length + 1;
+    output_fs.write(reinterpret_cast<const char *>(&length), sizeof(uint32_t));
+    for(unsigned int i = 0; i < length; ++i) {
       mer = gene.substr(i, kmer_length);
       if(!hash->get_val_for_key(mer, &val)) {
         val = 0;
       }
-      std::cout << val << ' ';
+      output_fs.write(reinterpret_cast<const char *>(&val), sizeof(uint32_t));
     }
-    std::cout << '\n';
   }
 
   std::cerr << "Done counting genes" << std::endl;
