@@ -18,6 +18,13 @@ def memory_usage():
     """Returns in kilobytes, the total (or maybe peak) memory usage"""
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
 
+def file(f):
+    if os.path.exists(f):
+        return f
+    else:
+        logging.error('file "%s" does not exist, cannot continue', f)
+        sys.exit(1)
+
 def trim_and_clamp(arr,
                    left_trim=None,
                    right_trim=None,
@@ -51,10 +58,10 @@ def count_main():
     """Count kmers in `reads` file, then list the corresponding count for 
     each gene in `genes`"""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--genes', required=True, type=str,
+    parser.add_argument('--genes', required=True, type=file,
                         help='FASTA file with genes')
     parser.add_argument('--samples', required=True,
-                        type=str, help='FASTA or FASTQ samples')
+                        type=file, help='FASTA or FASTQ samples')
     parser.add_argument('--canonical', action='store_true', default=False,
                         help='Consider every kmer as its canonical form')
     parser.add_argument('--threads', type=int, default=1,
@@ -67,6 +74,11 @@ def count_main():
                         help='Name of output file to write to')
     args = parser.parse_args(sys.argv[2:])
     logging.debug(args)
+
+    if os.path.exists(args.output):
+        logging.error('Output file "%s" already exists, will not overwrite it', args.output)
+        sys.exit(1)
+
     # lower case it!
     args.canonical = 'true' if args.canonical else 'false'
     # <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> <genes_file> <output>
@@ -111,7 +123,7 @@ def score_main():
                         help='Consider values > <max> to be 0')
     parser.add_argument('--method', choices=list(score_methods.keys()),
                        required=True, type=str, help='Scoring method to use for kmer counts')
-    parser.add_argument('cf_file', help='Clownfish binary file to score')
+    parser.add_argument('cf_file', type=file, help='Clownfish binary file to score')
     args = parser.parse_args(sys.argv[2:])
     logging.debug(args)
 
@@ -130,7 +142,7 @@ def score_main():
 def dump_main():
     """Convert the cf binary file to ascii"""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('cf_file', help='Clownfish binary file to dump')
+    parser.add_argument('cf_file', type=file, help='Clownfish binary file to dump')
     args = parser.parse_args(sys.argv[2:])
     logging.debug(args)
    
