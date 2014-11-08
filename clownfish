@@ -9,8 +9,8 @@ import argparse
 import resource
 import functools
 import subprocess
+import struct
 import numpy
-from Bio import SeqIO
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(message)s')
 
@@ -63,14 +63,16 @@ def count_main():
                         help='Initial size of jellyfish hash table') 
     parser.add_argument('--kmer-length', type=int, required=True, 
                         help='Length of kmer to use')
+    parser.add_argument('--output', type=str, default='occur.cf',
+                        help='Name of output file to write to')
     args = parser.parse_args(sys.argv[2:])
     logging.debug(args)
     # lower case it!
     args.canonical = 'true' if args.canonical else 'false'
-    # <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> <genes_file>
+    # <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> <genes_file> <output>
     child_args = [os.path.join(os.path.dirname(__file__), 'count'),
                  args.kmer_length, args.canonical,  args.size, args.threads,
-                 args.samples, args.genes]
+                 args.samples, args.genes, args.output]
     child_args = list(map(str, child_args))
 
     logging.debug("Launching child process `count`")
@@ -79,17 +81,22 @@ def count_main():
                           stdout=sys.stdout, stderr=sys.stderr,
                           close_fds=False)
 
-def score_file(file, preprocess, primary, secondary):
-    """DOC"""
-    with open(file) as handle:    
-        int_lists = (list(map(int, line.split())) for line in handle)
-        arrs = (numpy.array(int_list) for int_list in int_lists)
-        scores = (primary(preprocess(arr)) for arr in arrs)
-        return secondary(numpy.array(list(scores)))
+def parse_cf_file(handle):
+    """Yields each numpy.array of integers found in the cf binary file
+    format is `((uint32 length)(uint32,..., length of them))...` and
+    uint32 is little endian"""
+    # this is scary!
+    while True:
+        length_b = handle.read(4)
+        if length_b == b'':
+            return 
+        # convert uint32 little endian to integer
+        (length, ) = struct.unpack('<I', length_b)
+        yield numpy.fromstring(handle.read(4 * length), dtype=numpy.uint32)
  
 def score_main():
-    """Scores a collection of counts, specify a scoring method for first scoring
-    each row (corresponds to a gene segment) and then for the column"""
+    """Scores a single count file read from <cf-file>. each gene-segment is
+    printed in order to stdout, newline seperated"""
     score_methods = {'mean': numpy.mean,
                      'median': numpy.median}
 
@@ -102,37 +109,48 @@ def score_main():
                         help='Consider values < <min> to be 0')
     parser.add_argument('--max', type=int, default=None,
                         help='Consider values > <max> to be 0')
-    parser.add_argument('--primary-method', choices=list(score_methods.keys()),
+    parser.add_argument('--method', choices=list(score_methods.keys()),
                        required=True, type=str, help='Scoring method to use for kmer counts')
-    parser.add_argument('--secondary-method', choices=list(score_methods.keys()),
-                       required=True, type=str, help='Scoring method to use for gene scores')
-    parser.add_argument('files', nargs='+', help='Files to score', required=True)
+    parser.add_argument('cf_file', help='Clownfish binary file to score')
     args = parser.parse_args(sys.argv[2:])
     logging.debug(args)
 
+    primary_scoring_method = score_methods[args.primary_method]
     trim_and_clamper = functools.partial(trim_and_clamp,
                                          left_trim=args.left_trim,
                                          right_trim=args.right_trim,
                                          minimum=args.min,
                                          maximum=args.max)
 
-    primary_scoring_method = score_methods[args.primary_method]
-    secondary_scoring_method = score_methods[args.secondary_method]
-    scores = (score_file(file) for file in args.files)    
-    str_scores = (str(score) for score in scores)    
+    with open(args.cf_file, 'rb') as cf_handle:
+        arrs = parse_cf_file(cf_handle)
+        scores = (primary_scoring_method(trim_and_clamper(arr)) for arr in arrs)
+        str_scores = (str(score) for score in scores)    
+        sys.stdout.write('\t'.join(str_scores) + '\n')
 
-    sys.stdout.write('\t'.join(args.files) + '\n')
-    sys.stdout.write('\t'.join(str_scores) + '\n')
+def dump_main():
+    """Convert the cf binary file to ascii"""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('cf_file', help='Clownfish binary file to dump')
+    args = parser.parse_args(sys.argv[2:])
+    logging.debug(args)
+   
+    with open(args.cf_file, 'rb') as cf_handle:
+        arrs = parse_cf_file(cf_handle)
+        str_arrs = (' '.join(map(str, arr)) for arr in arrs)
+        sys.stdout.writelines(str_arr + '\n' for str_arr in str_arrs)
 
 def main():
     """Estimate relative gene abundance using kmers"""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['count', 'score'])
+    parser.add_argument('command', choices=['count', 'score', 'dump'])
     args = parser.parse_args(sys.argv[1:2])
     if args.command == 'count':
         count_main()
     elif args.command == 'score':
         score_main()
+    elif args.command == 'dump':
+        dump_main()
     else:
         print("Invalid choice")
         sys.exit(1)
