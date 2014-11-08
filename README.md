@@ -8,7 +8,7 @@
     - now have a cpp program using jellyfish as a lib to do the counting, then querying for each gene, outputs to stdout a space seperated list of counts
 
 # TODO:
-
+clownfish count does not handle resizing of jellyfish hash well i.e. memory explodes. everything is fine so long as the --size given is safely over the number of distinct kmers. may want to move to taking a .jf file as input or using a .jf file as an intermediate.
 
 # jellyfish -C flag test
 input: ATCGCGGTA
