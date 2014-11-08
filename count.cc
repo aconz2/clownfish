@@ -1,6 +1,8 @@
 #include <string>
 #include <fstream>
 
+#include <boost/timer/timer.hpp>
+
 #include <jellyfish/err.hpp>
 #include <jellyfish/thread_exec.hpp>
 #include <jellyfish/hash_counter.hpp>
@@ -56,97 +58,89 @@ int main(int argc, char *argv[]) {
   std::ifstream genes_fs(argv[6]);
   std::ofstream output_fs(argv[7], std::ios::binary);
 
-  std::cerr << "Starting to fill jelly hash" << std::endl;
+  std::cerr << "=== Filling jellyfish hash ===" << std::endl;
   // Parse the input file.
   // 7 is the length in bits of the counter field
   // 126 is the maximum reprobe value
   mer_hash ary(initial_hash_size, mer_dna::k() * 2, 7, nb_threads, 126);
   {
+    boost::timer::auto_cpu_timer t(std::cerr, 2); 
     // Count the k-mers in the reads and store them in the hash array 'ary'
     mer_counter counter(nb_threads, ary, argv + 5, argv + 6, canonical);
     counter.exec_join(nb_threads);
   }
 
-  std::cerr << "Done filling jelly fish" << std::endl; 
-
   auto hash = ary.ary();
- 
-  uint64_t max = 0;
-  uint64_t total = 0;
-  uint64_t distinct = 0;
-  for(auto it = hash->begin(); it != hash->end(); ++it) {
-    auto pair = *it;
-    //std::cerr << pair.first << ':'  << pair.second <<  std::endl;
-    distinct++;
-    total += pair.second;
-    if(pair.second > max) {
-      max = pair.second;
+
+  {
+    boost::timer::auto_cpu_timer t(std::cerr, 2); 
+    std::cerr << "=== Calcuating kmer stats ===" << std::endl;
+    uint64_t max = 0;
+    uint64_t total = 0;
+    uint64_t distinct = 0;
+    for(auto it = hash->begin(); it != hash->end(); ++it) {
+      auto pair = *it;
+      //std::cerr << pair.first << ':'  << pair.second <<  std::endl;
+      distinct++;
+      total += pair.second;
+      if(pair.second > max) {
+        max = pair.second;
+      }
+    }
+    std::cerr << "distinct:" << distinct << std::endl;
+    std::cerr << "max:" << max << std::endl;
+    std::cerr << "total:" << total << std::endl;
+  }
+
+  {
+    boost::timer::auto_cpu_timer t(std::cerr, 2); 
+    std::cerr << "=== Counting genes ===" << std::endl;
+
+    mer_dna mer;
+    uint64_t val = 0;
+    uint64_t val_ = 0;
+    std::string buf; 
+    std::string gene;
+    
+    // skip the first line
+    std::getline(genes_fs, buf); 
+    while(!genes_fs.eof()) {
+      // "parse" the fasta file, wouldnt be necessary if fasta files 
+      // didn't allow wrapped lines!
+      gene = "";
+      do {
+        std::getline(genes_fs, buf);
+        // 2 checks on the same condition, don't know how to combine
+        if(buf[0] != '>') {
+          gene += buf; 
+        }
+      } while(buf[0] != '>' && !genes_fs.eof());
+
+      // count the kmers
+      unsigned int length = (int) gene.size() - kmer_length + 1;
+      output_fs.write(reinterpret_cast<const char *>(&length), sizeof(uint32_t));
+      for(unsigned int i = 0; i < length; ++i) {
+        mer = gene.substr(i, kmer_length);
+        if(!hash->get_val_for_key(mer, &val)) {
+          val = 0;
+        }
+        // when canonical flag, set the value to be the max of it and its reverse complement
+        if(canonical) {
+          mer.reverse_complement();
+          if(!hash->get_val_for_key(mer, &val_)) {
+            val_ = 0;
+          }
+          if(val_ > val) {
+            val = val_;
+          }
+        } 
+
+        //std::cerr << val << ' ';
+        output_fs.write(reinterpret_cast<const char *>(&val), sizeof(uint32_t));
+      }
+      //std::cerr << std::endl;
     }
   }
-
-  std::cerr << "distinct:" << distinct << std::endl;
-  std::cerr << "max:" << max << std::endl;
-  std::cerr << "total:" << total << std::endl;
-
-  mer_dna mer;
-  uint64_t val = 0;
-  std::string buf; 
-  std::string gene;
-  
-  std::cerr << "Starting to count genes" << std::endl;
-  // skip the first line
-  std::getline(genes_fs, buf); 
-  while(!genes_fs.eof()) {
-    // "parse" the fasta file, wouldnt be necessary if fasta files 
-    // didn't allow wrapped lines!
-    gene = "";
-    do {
-      std::getline(genes_fs, buf);
-      // 2 checks on the same condition, don't know how to combine
-      if(buf[0] != '>') {
-        gene += buf; 
-      }
-    } while(buf[0] != '>' && !genes_fs.eof());
-
-    // count the kmers
-    unsigned int length = (int) gene.size() - kmer_length + 1;
-    output_fs.write(reinterpret_cast<const char *>(&length), sizeof(uint32_t));
-    for(unsigned int i = 0; i < length; ++i) {
-      mer = gene.substr(i, kmer_length);
-      if(!hash->get_val_for_key(mer, &val)) {
-        val = 0;
-      }
-      //std::cerr << val << ' ';
-      output_fs.write(reinterpret_cast<const char *>(&val), sizeof(uint32_t));
-    }
-    //std::cerr << std::endl;
-  }
-
-  std::cerr << "Done counting genes" << std::endl;
-/*  for(std::string line; std::getline(std::cin, line); ) {
-    for(int i = 0; i < (int) line.size() - kmer_length + 1; ++i) {
-      mer = line.substr(i, kmer_length);
-      if(!hash->get_val_for_key(mer, &val)) {
-        val = 0;
-      }
-      std::cout << val << ' ';
-    }
-    std::cout << '\n';
-  }
-*/
-  // Query the database for all the mers on the command line
-/* commented out for test
-  mer_dna  m;
-  uint64_t val = 0;
-  auto hash = ary.ary();
-  for(int i = 5; i < argc; ++i) {
-    m = argv[i];
-    m.canonicalize();
-    if(!hash->get_val_for_key(m, &val))
-      val = 0;
-    std::cout << m << ' ' << val << '\n';
-  }
-*/
 
   return 0;
 }
