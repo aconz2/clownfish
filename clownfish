@@ -70,6 +70,8 @@ def count_main():
                         help='Initial size of jellyfish hash table') 
     parser.add_argument('--kmer-length', type=int, required=True, 
                         help='Length of kmer to use')
+    parser.add_argument('--kmer-stats', action='store_true', default=False,
+                        help='Output distinct, max count, and total kmers from sample')
     parser.add_argument('--output', type=str, default='occur.cf',
                         help='Name of output file to write to')
     args = parser.parse_args(sys.argv[2:])
@@ -81,10 +83,11 @@ def count_main():
 
     # lower case it!
     args.canonical = 'true' if args.canonical else 'false'
+    args.kmer_stats = 'true' if args.kmer_stats else 'false'
     # <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> <genes_file> <output>
     child_args = [os.path.join(os.path.dirname(__file__), 'count'),
                  args.kmer_length, args.canonical,  args.size, args.threads,
-                 args.samples, args.genes, args.output]
+                 args.samples, args.genes, args.output, args.kmer_stats]
     child_args = list(map(str, child_args))
 
     logging.debug("Launching child process `count`")

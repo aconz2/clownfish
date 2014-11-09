@@ -44,15 +44,16 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-  if(argc != 8) {
+  if(argc != 9) {
     std::cerr << "Error: Wrong number of arguments\n"
-              << "Usage: " << argv[0] << " <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> <genes_file> <output_file>" << std::endl;
+              << "Usage: " << argv[0] << " <k_mer_len> <canonical> <hash_size> <nb_threads> <reads_file> <genes_file> <output_file> <kmer_stats>" << std::endl;
     exit(1);
   }
 
   const int kmer_length = std::stoi(argv[1]);
   mer_dna::k(kmer_length);
   const bool canonical = strcmp(argv[2], "true") == 0;
+  const bool kmer_stats = strcmp(argv[8], "true") == 0;
   const size_t initial_hash_size = std::stoul(argv[3]);
   const int    nb_threads        = std::stoi(argv[4]);
   std::ifstream genes_fs(argv[6]);
@@ -72,20 +73,18 @@ int main(int argc, char *argv[]) {
 
   auto hash = ary.ary();
 
-  {
+  if(kmer_stats) {
     boost::timer::auto_cpu_timer t(std::cerr, 2); 
     std::cerr << "=== Calcuating kmer stats ===" << std::endl;
     uint64_t max = 0;
     uint64_t total = 0;
     uint64_t distinct = 0;
+    uint64_t val = 0;    
     for(auto it = hash->begin(); it != hash->end(); ++it) {
-      auto pair = *it;
-      //std::cerr << pair.first << ':'  << pair.second <<  std::endl;
+      val = it->second;
       distinct++;
-      total += pair.second;
-      if(pair.second > max) {
-        max = pair.second;
-      }
+      total += val;
+      max = std::max(val, max);
     }
     std::cerr << "distinct:" << distinct << std::endl;
     std::cerr << "max:" << max << std::endl;
