@@ -141,5 +141,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  std::cerr << "=== Exiting clownfish count ===" << std::endl;
   return 0;
 }
