@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
     } 
     po::notify(vm);
   } catch(po::error &e) {
-    std::cerr << "ERROR:" << e.what() << std::endl;
+    std::cerr << "ERROR:" << e.what() << std::endl << desc;
     exit(1);
   }
 
