@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
     ("reads,r", po::value<std::string>(&reads)->required(), "Reads from sample, fast(a|q)")
     ("genes,g", po::value<std::string>(&genes)->required(), "Genes file, fasta")
     ("threads,t", po::value<int>(&num_threads)->default_value(1), "Number of threads to use")
-    ("kmer-stats", po::value<bool>(&kmer_stats)->default_value(false), "Print max count, total, and unique kmers from Jellyfish (Adds large time cost)");
+    ("kmer-stats", po::bool_switch(&kmer_stats)->default_value(false), "Print max count, total, and unique kmers from Jellyfish (Adds large time cost)");
 
   po::variables_map vm;
   try {
@@ -104,6 +104,10 @@ int main(int argc, char *argv[]) {
   mer_hash hash(hash_size, mer_dna::k() * 2, counter_length, num_threads, max_reprobe);
 
   std::ifstream genes_fs(genes);
+  if(!genes_fs.good()) {
+      std::cerr << "Problem opening '" << genes << "' - will now exit" << std::endl;
+      exit(1);
+  }
   std::cout.precision(20);
 
   /* ---------- Fill Jellyfish Hashtable ---------- */
