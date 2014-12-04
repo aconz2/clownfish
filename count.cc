@@ -55,13 +55,14 @@ namespace po = boost::program_options;
 int main(int argc, char *argv[]) {
 
   /* provided by Guillaume */
-  const int counter_length = 7;
   const int max_reprobe = 126;
   const bool canonical = false;
 
   /* default values */
+  int counter_length = 7;
   bool kmer_stats = false;
   int num_threads = 1;
+  bool raw = false;
 
   /* manadatory arguments */
   int kmer_length;
@@ -76,8 +77,10 @@ int main(int argc, char *argv[]) {
     ("hash-size,s", po::value<unsigned long>(&hash_size)->required(), "Initial hash table size for Jellyfish (will grow if full)")
     ("reads,r", po::value<std::string>(&reads)->required(), "Reads from sample, fast(a|q)")
     ("genes,g", po::value<std::string>(&genes)->required(), "Genes file, fasta")
-    ("threads,t", po::value<int>(&num_threads)->default_value(1), "Number of threads to use")
-    ("kmer-stats", po::bool_switch(&kmer_stats)->default_value(false), "Print max count, total, and unique kmers from Jellyfish (Adds large time cost)");
+    ("threads,t", po::value<int>(&num_threads)->default_value(num_threads), "Number of threads to use")
+    ("counter-length", po::value<int>(&counter_length)->default_value(counter_length), "Length (in bits) of counter field in Jellyfish hash")
+    ("kmer-stats", po::bool_switch(&kmer_stats)->default_value(kmer_stats), "Print max count, total, and unique kmers from Jellyfish (Adds large time cost)")
+    ("raw", po::bool_switch(&raw)->default_value(raw), "Print tab-seperated counts for each gene, one per line. ie. don't take the mean");
 
   po::variables_map vm;
   try {
@@ -98,7 +101,9 @@ int main(int argc, char *argv[]) {
                                              ",reads=" << reads <<
                                              ",genes=" << genes <<
                                            ",threads=" << num_threads <<
-                                         ",kmer_stats=" << kmer_stats << std::endl;
+                                         ",kmer_stats=" << kmer_stats <<
+                                         ",raw=" << raw <<
+                                         ",counter_length=" << counter_length << std::endl;
 
   mer_dna::k(kmer_length);
   mer_hash hash(hash_size, mer_dna::k() * 2, counter_length, num_threads, max_reprobe);
@@ -150,7 +155,6 @@ int main(int argc, char *argv[]) {
     boost::timer::auto_cpu_timer t(std::cerr, 2); 
     std::cerr << "=== Counting genes ===" << std::endl;
     
-    mer_dna mer;
     std::string buf; 
     // skip the first line
     std::getline(genes_fs, buf); 
@@ -166,19 +170,35 @@ int main(int argc, char *argv[]) {
         }
       } while(buf[0] != '>' && !genes_fs.eof());
 
-     uint64_t sum = 0;
-     uint64_t val;
-     int length = gene.size() - kmer_length + 1;
-      for(int i = 0; i < length; ++i) {
-        mer = gene.substr(i, kmer_length);
-        if(!ary->get_val_for_key(mer, &val)) {
-          val = 0;
+      uint64_t val;
+      mer_dna mer;
+      int length = gene.size() - kmer_length;
+
+      if(raw) {
+        for(int i = 0; i <= length; ++i) {
+          if(i != 0) {
+            std::cout << '\t';
+          }    
+          mer = gene.substr(i, kmer_length);
+          if(!ary->get_val_for_key(mer, &val)) {
+            val = 0;
+          }
+          std::cout << val;
         }
-        sum += val;
+        std::cout << std::endl;
+      } else {
+        uint64_t sum = 0;
+        for(int i = 0; i <= length; ++i) {
+          mer = gene.substr(i, kmer_length);
+          if(!ary->get_val_for_key(mer, &val)) {
+            val = 0;
+          }
+          sum += val;
+        }
+        std::cout << (double) sum / length << std::endl;
       }
-      std::cout << (double) sum / length << std::endl;
-    }
-  }
+    }// while genes
+  }// block scope
 
   //std::cerr << "=== Exiting clownfish count ===" << std::endl;
   return 0;
