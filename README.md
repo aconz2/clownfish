@@ -29,19 +29,11 @@ export PATH="`pwd`/bin:$PATH"
 ```
 
 Make sure that jellyfish is in your `PKG_CONFIG_PATH` and `LD_LIBRARY_PATH`, something like
-<<<<<<< HEAD
 - `PKG_CONFIG_PATH` /some/prefix/dir/jellyfish-2.1.4/build/lib/pkgconfig/ 
 - `LD_LIBRARY_PATH` /some/prefix/dir/jellyfish-2.1.4/build/lib/ 
 
 And that `BOOST_ROOT` contains the root to your boost installation, something like
 - `BOOST_ROOT` /some/prefix/dir/boost-1.54.0
-=======
-`PKG_CONFIG_PATH` /some/prefix/dir/jellyfish-2.1.4/build/lib/pkgconfig/ 
-`LD_LIBRARY_PATH` /some/prefix/dir/jellyfish-2.1.4/build/lib/ 
-
-And that `BOOST_ROOT` contains the root to your boost installation, something like
-`BOOST_ROOT` /some/prefix/dir/boost-1.54.0
->>>>>>> 519a9032be21436a5735cf780ac7b87d539914e3
 
 # Usage #
 
