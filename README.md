@@ -4,7 +4,9 @@ set of reads, we wish to assign an abundance to each gene. Clownfish works at
 the k-mer level and (currently) calculates the abundance to be the mean of the
 abundance of its component k-mers.
 
-Clownfish is under active development and new methods are currently be developed and evaluated.
+Clownfish is under active development and new methods are currently be
+developed and evaluated. Versions are tagged and master serves as a development
+branch.
 
 # Requirements #
 
