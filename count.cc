@@ -156,19 +156,25 @@ int main(int argc, char *argv[]) {
     std::cerr << "=== Counting genes ===" << std::endl;
     
     std::string buf; 
-    // skip the first line
-    std::getline(genes_fs, buf); 
     while(!genes_fs.eof()) {
-      // "parse" the fasta file, wouldnt be necessary if fasta files didn't allow wrapped lines!
-      // TODO: move this into a boost filter or something
-      std::string gene = "";
-      do {
-        std::getline(genes_fs, buf);
-        // 2 checks on the same condition, don't know how to combine
-        if(buf[0] != '>') {
-          gene += buf; 
-        }
-      } while(buf[0] != '>' && !genes_fs.eof());
+      // change to line mode, just print the '>id' section and assume genes are all on one line
+      std::getline(genes_fs, buf); 
+      //
+      if(genes_fs.eof()) {
+        break;
+      }
+      if(buf[0] == '>') {
+        std::cout << buf << std::endl;
+        continue;
+      }
+      std::string gene = buf;
+      //do {
+      //  std::getline(genes_fs, buf);
+      //  // 2 checks on the same condition, don't know how to combine
+      //  if(buf[0] != '>') {
+      //    gene += buf; 
+      //  }
+      //} while(buf[0] != '>' && !genes_fs.eof());
 
       uint64_t val;
       mer_dna mer;
@@ -197,7 +203,7 @@ int main(int argc, char *argv[]) {
         }
         std::cout << (double) sum / length << std::endl;
       }
-    }// while genes
+    } // while
   }// block scope
 
   //std::cerr << "=== Exiting clownfish count ===" << std::endl;
