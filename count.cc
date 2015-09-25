@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
 
   /* provided by Guillaume */
   const int max_reprobe = 126;
-  const bool canonical = false;
+  const bool canonical = true;
 
   /* default values */
   int counter_length = 7;
@@ -182,21 +182,21 @@ int main(int argc, char *argv[]) {
 
       if(raw) {
         for(int i = 0; i <= length; ++i) {
-          if(i != 0) {
-            std::cout << '\t';
-          }    
           mer = gene.substr(i, kmer_length);
-          if(!ary->get_val_for_key(mer, &val)) {
+          if(!ary->get_val_for_key(canonical ? mer.get_canonical() : mer, &val)) {
             val = 0;
           }
           std::cout << val;
+          if(i != length) {
+            std::cout << '\t';
+          }
         }
         std::cout << std::endl;
       } else {
         uint64_t sum = 0;
         for(int i = 0; i <= length; ++i) {
           mer = gene.substr(i, kmer_length);
-          if(!ary->get_val_for_key(mer, &val)) {
+          if(!ary->get_val_for_key(canonical ? mer.get_canonical() : mer, &val)) {
             val = 0;
           }
           sum += val;
